@@ -1,0 +1,326 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+  /* ── Scrollbar global escura ── */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.12) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.12);
+    border-radius: 99px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.22);
+  }
+
+  /* Classe específica para o scroll do modal (glass-scrollbar) */
+  .glass-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.10) transparent;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.10);
+    border-radius: 99px;
+  }
+
+  .glass-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.20);
+  }
+
+
+
+
+@layer base {
+  :root {
+    /* ── Brand tokens (kept as standalone for direct use) ── */
+    --midnight: 210 65% 12%;
+
+    /* ── shadcn/ui system tokens (HSL space-separated for hsl(var(--x))) ── */
+    --background: 0 0% 6.7%;
+    --foreground: 60 13% 96%;
+    --card: 0 0% 6.7%;
+    --card-foreground: 60 13% 96%;
+    --popover: 0 0% 6.7%;
+    --popover-foreground: 60 13% 96%;
+    --primary: 46 65% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 65% 12%;
+    --secondary-foreground: 60 13% 96%;
+    --muted: 212 13% 72%;
+    --muted-foreground: 212 13% 72%;
+    --accent: 46 65% 52%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 65% 12%;
+    --input: 210 65% 12%;
+    --ring: 46 65% 52%;
+    --radius: 0.5rem;
+    /* ── Layer system ─────────────────────────────────── */
+    --z-base:            0;
+    --z-dropdown:      100;
+    --z-sticky:        200;
+    --z-modal-backdrop: 300;
+    --z-modal-dialog:  400;
+    --z-popover:       500;
+    --z-tooltip:       600;
+
+    /* Ajuda o navegador a renderizar controles nativos (scrollbar, select, autofill) no tema correto */
+    color-scheme: dark;
+  }
+
+  .light {
+    /* ── Brand tokens (light) ── */
+    --midnight: 240 8% 96%;
+
+    /* ── shadcn/ui system tokens (light) ── */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 6.7%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 6.7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 6.7%;
+    --primary: 46 65% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 8% 96%;
+    --secondary-foreground: 0 0% 6.7%;
+    --muted: 215 16% 47%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 46 65% 52%;
+    --accent-foreground: 0 0% 6.7%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 8% 90%;
+    --input: 240 8% 90%;
+    --ring: 46 65% 52%;
+
+    color-scheme: light;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    max-width: 100vw;
+    /* Evita o iOS Safari re-escalar a fonte automaticamente ao rotacionar a tela */
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    max-width: 100vw;
+    /* Remove o flash cinza padrão ao tocar em botões/links no mobile */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Reset básico de mídia — previne vazamento de largura e Cumulative Layout Shift */
+  img, video, svg, canvas {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Foco visível consistente com a identidade da marca, só para navegação por teclado */
+  :focus-visible {
+    outline: 2px solid #D4AF37;
+    outline-offset: 2px;
+    /* Exceção intencional (impeccable design-system-radius): focus ring fica
+       crisp em 2px, NÃO no `--radius` (0.5rem = 8px), que o DESIGN.md reserva
+       para cards/botões ("Rounded lg 8px", linhas 132/157). Um anel de foco a
+       8px arredondaria a borda de acessibilidade e reduziria o contraste
+       percebido. Não existe token de 2px; `var(--radius)` seria mudança visual
+       perceptível — logo o valor literal é mantido propositalmente. */
+    border-radius: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Seleção de texto com a cor da marca */
+  ::selection {
+    background-color: rgba(212, 175, 55, 0.3);
+    /* Bug real corrigido (impeccable design-system-color): texto branco puro
+       (#ffffff) sobre o highlight gold/primary = `--primary-foreground`
+       (0 0% 100% = #ffffff). Token equivalente com aparência idêntica —
+       troca sem mudança visual. */
+    color: hsl(var(--primary-foreground));
+  }
+
+  /* Respeita a preferência de movimento reduzido do sistema operacional,
+     inclusive para animações/transições puramente CSS (Framer Motion já
+     é tratado componente a componente via useReducedMotion) */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Evita "órfãs" (última linha com uma palavra solta) em parágrafos longos */
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  .cinematic-scroll {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+  }
+
+  .backdrop-luxury {
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+  }
+
+  /* No mobile, backdrop-filter é uma das propriedades mais caras pra GPU.
+     Reduzimos a intensidade sem remover o efeito visual. */
+  @media (max-width: 767px) {
+    .backdrop-luxury {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
+  .transition-elegant {
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Transição de cor de tema (antes aplicada globalmente ao seletor *,
+     o que forçava recálculo de estilo na árvore inteira do DOM a cada
+     mudança de estado em qualquer componente). Agora é opt-in: aplicar
+     esta classe só nos elementos que de fato precisam de transição
+     suave de background-color/color/border-color. */
+  .theme-transition {
+    transition: background-color 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+                color 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Editorial section label: "01 — Section Name" */
+  .section-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.875rem;
+    font-family: var(--font-montserrat), sans-serif;
+    font-size: 0.6875rem;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: #D4AF37;
+  }
+
+  .section-label::before {
+    content: "";
+    display: block;
+    width: 2.25rem;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.5;
+  }
+
+  /* Thin gold hairline divider, replaces radial glows */
+  .hairline {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(212, 175, 55, 0.35),
+      transparent
+    );
+  }
+
+  .hairline-static {
+    height: 1px;
+    /* Exceção intencional (impeccable design-system-color): branco translúcido
+       a 8% pertence à família de overlays brancos-translúcidos do projeto
+       (scrollbar 0.10/0.22, glass-scrollbar 0.10/0.20, este 0.08). A paleta do
+       DESIGN.md só define cores opacas (Gold Prestige, Cloud White, Silver
+       Mist, Executive Black, Midnight) — não há token de "branco em alpha".
+       Alternativas tokenizadas mudariam a aparência: `hsl(var(--border))` =
+       Midnight sólido (mal visível sobre o bg dark), `hsl(var(--foreground))`
+       = Cloud White off-white quente. Logo, valor literal — consistente com os
+       demais overlays translúcidos do arquivo. */
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  /* Cinematic vignette for full-bleed imagery */
+  .vignette::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      120% 100% at 50% 100%,
+      rgba(17, 17, 17, 0.85) 0%,
+      rgba(17, 17, 17, 0.35) 45%,
+      transparent 75%
+    );
+  }
+
+  /* Large editorial numerals used as background marks */
+  .numeral-mark {
+    font-family: var(--font-cinzel), serif;
+    font-weight: 300;
+    line-height: 1;
+    color: rgba(212, 175, 55, 0.08);
+    -webkit-text-stroke: 1px rgba(212, 175, 55, 0.12);
+  }
+
+  /* Hide number input spinners globally */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield; /* Firefox */
+  }
+
+  /* Suporte a notch/safe-area em iPhones — usar em headers/footers fixos */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

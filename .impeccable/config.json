@@ -1,0 +1,101 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "#60a5fa",
+        "files": [
+          "lib/admin-utils.ts"
+        ],
+        "reason": "Approved brand color in admin-utils",
+        "createdAt": "2026-07-08T19:04:30.518Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fbbf24",
+        "files": [
+          "lib/admin-utils.ts"
+        ],
+        "reason": "Approved brand color in admin-utils",
+        "createdAt": "2026-07-08T19:04:36.939Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#10b981",
+        "files": [
+          "lib/admin-utils.ts"
+        ],
+        "reason": "Approved brand color in admin-utils",
+        "createdAt": "2026-07-08T19:04:43.526Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#aeb7c1",
+        "files": [
+          "lib/admin-utils.ts"
+        ],
+        "reason": "Approved brand color in admin-utils",
+        "createdAt": "2026-07-08T19:04:54.185Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(255,255,255,0.12)",
+        "files": [
+          "app/globals.css"
+        ],
+        "reason": "Custom scrollbar thumb color - intentional design choice for refined UI",
+        "createdAt": "2026-07-16T14:20:00.000Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(255,255,255,0.22)",
+        "files": [
+          "app/globals.css"
+        ],
+        "reason": "Custom scrollbar thumb hover color - intentional design choice for refined UI",
+        "createdAt": "2026-07-16T14:20:00.000Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(255,255,255,0.10)",
+        "files": [
+          "app/globals.css"
+        ],
+        "reason": "Custom glass scrollbar color - intentional design choice for refined UI",
+        "createdAt": "2026-07-16T14:20:00.000Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(255,255,255,0.20)",
+        "files": [
+          "app/globals.css"
+        ],
+        "reason": "Custom glass scrollbar hover color - intentional design choice for refined UI",
+        "createdAt": "2026-07-16T14:20:00.000Z"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "99px",
+        "files": [
+          "app/globals.css"
+        ],
+        "reason": "Custom scrollbar pill shape - intentional design choice for refined UI",
+        "createdAt": "2026-07-16T14:20:00.000Z"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "2px",
+        "reason": "Focus ring crisp em 2px é intencional — --radius (8px) é reservado a cards/botões no DESIGN.md; 8px no focus seria regressão a11y/visual. Confirmado pelo usuário.",
+        "createdAt": "2026-07-26T15:07:35.684Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(255, 255, 255, 0.08)",
+        "reason": "Overlay branco-translúcido da família consistente do arquivo (scrollbar/glass 0.10–0.22); paleta do DESIGN.md não define branco-em-alpha. Confirmado pelo usuário.",
+        "createdAt": "2026-07-27T13:46:00.094Z"
+      }
+    ]
+  }
+}
