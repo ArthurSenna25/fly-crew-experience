@@ -67,36 +67,121 @@ type IdleCapableWindow = {
 
 export default function SectionPrefetch() {
   useEffect(() => {
+    // Telemetria best-effort (mesmo padrão de beacon do Diagnostics.tsx: POST
+    // /api/debug-log via sendBeacon, fallback fetch keepalive). Nunca bloqueia
+    // o dispatch — falha de telemetria não é falha de prefetch. Todos os
+    // valores enviados são literais curtas controladas (tags, slugs de seção,
+    // enums, números) — nada de user input, nada que precise de truncamento.
+    const send = (
+      tag: string,
+      msg: string,
+      extra?: Record<string, unknown>,
+    ) => {
+      const payload: {
+        tag: string;
+        msg: string;
+        extra?: Record<string, unknown>;
+      } = { tag, msg };
+      if (extra) payload.extra = extra;
+      const bodyStr = JSON.stringify(payload);
+      try {
+        if (
+          typeof navigator !== 'undefined' &&
+          typeof navigator.sendBeacon === 'function'
+        ) {
+          navigator.sendBeacon('/api/debug-log', bodyStr);
+        } else if (typeof fetch === 'function') {
+          void fetch('/api/debug-log', {
+            method: 'POST',
+            body: bodyStr,
+            keepalive: true,
+          });
+        }
+      } catch {
+        // best-effort: telemetria nunca deve quebrar o prefetch.
+      }
+    };
+
     const nav = navigator as NavigatorLike;
     const conn = nav.connection;
+    const mountPerf = performance.now();
 
     // Respeita Data Saver e conexões muito lentas: o usuário sinalizou querer
     // economizar dados/largura — não prefetcha. iOS Safari não expõe
     // connection (conn === undefined), então os guardas são pulados — não
     // bloqueiam o prefetch, que é o comportamento desejado sem sinal de save.
-    if (conn?.saveData) return;
+    // Telemetria (b): quando um guard aborta, reporta o motivo e confirma
+    // networkInfoAvailable (boolean) — Safari fica undefined → never aborta.
+    if (conn?.saveData) {
+      send('SectionPrefetch', 'dispatch aborted', {
+        reason: 'saveData',
+        networkInfoAvailable: !!conn,
+        saveData: true,
+        effectiveType: conn.effectiveType ?? null,
+      });
+      return;
+    }
     if (
       conn?.effectiveType &&
       (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g')
     ) {
+      send('SectionPrefetch', 'dispatch aborted', {
+        reason: 'slowConnection',
+        networkInfoAvailable: !!conn,
+        saveData: conn.saveData ?? null,
+        effectiveType: conn.effectiveType,
+      });
       return;
     }
 
     // Fire-and-forget: só popula o cache de módulo/HTTP do navegador. Não usa
-    // o resultado, não afeta render. .catch silencia rejeição best-effort —
-    // falha de prefetch não é erro de usuário: a seção reimporta o chunk ao
-    // renderizar, e é esse o caminho autoritativo (e visível) de erro.
+    // o resultado, não afeta render. a seção reimporta o chunk ao renderizar,
+    // e é esse o caminho autoritativo (e visível) de erro.
     // Ordem = ordem de scroll (app/page.tsx): Manifesto → Experience → …
+    //
+    // trackImport envolve cada import() literal com telemetria (d): captura
+    // sucesso/falha individual + Duration via Date.now() antes/depois. O
+    // specifier CONTINUA literal (passar o promise a uma função NÃO quebra a
+    // análise estática de chunks do webpack — é o mesmo padrão de
+    // dynamic(() => import('...')) dos wrappers *SectionClient). NÃO usar
+    // array + import(variável): quebraria a análise estática e criaria
+    // context-module. Rejeição individual é tratada no onRejected (mesma
+    // semântica do .catch(() => {}) original — não vira unhandledrejection).
+    const trackImport = (section: string, p: Promise<unknown>) => {
+      const start = Date.now();
+      void p.then(
+        () =>
+          send('SectionPrefetch', 'chunk loaded', {
+            section,
+            ms: Date.now() - start,
+          }),
+        () =>
+          send('SectionPrefetch', 'chunk failed', {
+            section,
+            ms: Date.now() - start,
+          }),
+      );
+    };
+
     const prefetch = () => {
-      void import('@/components/landing/ManifestoSection').catch(() => {});
-      void import('@/components/landing/ExperienceSection').catch(() => {});
-      void import('@/components/landing/FoundersSection').catch(() => {});
-      void import('@/components/landing/TransformationSection').catch(() => {});
-      void import('@/components/landing/WorkshopsSection').catch(() => {});
-      void import('@/components/landing/GallerySection').catch(() => {});
-      void import('@/components/landing/TestimonialsSection').catch(() => {});
-      void import('@/components/landing/CommunitySection').catch(() => {});
-      void import('@/components/landing/FinalCTASection').catch(() => {});
+      // Telemetria (c): prefetch de fato começou a rodar — delta relativo ao
+      // mount. No Safari (fallback setTimeout) chega ~1500ms após o mount; no
+      // Chrome (requestIdleCallback) depende do tempo ocioso. Se nunca chega,
+      // temos a prova de que o dispatch não completou — exatamente o que
+      // queremos confirmar no cenário cache-frio do iOS Safari.
+      send('SectionPrefetch', 'prefetch started', {
+        msSinceMount: Math.round(performance.now() - mountPerf),
+        networkInfoAvailable: !!conn,
+      });
+      trackImport('manifesto', import('@/components/landing/ManifestoSection'));
+      trackImport('experience', import('@/components/landing/ExperienceSection'));
+      trackImport('founders', import('@/components/landing/FoundersSection'));
+      trackImport('transformation', import('@/components/landing/TransformationSection'));
+      trackImport('workshops', import('@/components/landing/WorkshopsSection'));
+      trackImport('gallery', import('@/components/landing/GallerySection'));
+      trackImport('testimonials', import('@/components/landing/TestimonialsSection'));
+      trackImport('community', import('@/components/landing/CommunitySection'));
+      trackImport('finalCta', import('@/components/landing/FinalCTASection'));
     };
 
     // requestIdleCallback não existe no Safari/iOS — o fallback setTimeout é o
@@ -106,6 +191,11 @@ export default function SectionPrefetch() {
     // ramo de fallback para `never`.
     const w = window as unknown as IdleCapableWindow;
     if (typeof w.requestIdleCallback === 'function') {
+      // Telemetria (a): dispatch scheduled via requestIdleCallback.
+      send('SectionPrefetch', 'dispatch scheduled', {
+        dispatch: 'requestIdleCallback',
+        networkInfoAvailable: !!conn,
+      });
       const id = w.requestIdleCallback(prefetch, { timeout: 3000 });
       return () => {
         if (typeof w.cancelIdleCallback === 'function') {
@@ -114,6 +204,11 @@ export default function SectionPrefetch() {
       };
     }
 
+    // Telemetria (a): dispatch scheduled via setTimeout fallback (Safari/iOS).
+    send('SectionPrefetch', 'dispatch scheduled', {
+      dispatch: 'setTimeout',
+      networkInfoAvailable: !!conn,
+    });
     const timerId = w.setTimeout(prefetch, 1500);
     return () => w.clearTimeout(timerId);
   }, []);

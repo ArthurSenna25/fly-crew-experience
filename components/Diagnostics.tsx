@@ -137,6 +137,31 @@ export default function Diagnostics() {
       userAgent: navigator.userAgent,
     });
 
+    // (h) Long tasks — tarefas que bloqueiam a thread principal por >50ms.
+    // PerformanceObserver expõe isso sem precisar de Mac/Web Inspector; revela
+    // se/ quando a thread trava no cenário de cache frio em navegação NOVA e
+    // por quanto tempo. NOTA: 'longtask' é família Chromium; em WebKit (iOS
+    // Safari) observe() pode lançar e cair no catch silencioso — nesse caso a
+    // telemetria do SectionPrefetch (beacons de setTimeout) permanece o sinal
+    // primário para iOS; este observer cobre Android/Chrome/desktop.
+    let longTaskObserver: PerformanceObserver | undefined;
+    if ('PerformanceObserver' in window) {
+      try {
+        longTaskObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            send('DiagnosticsLongTask', 'main thread blocked', {
+              duration: Math.round(entry.duration),
+              startTime: Math.round(entry.startTime),
+              name: entry.name,
+            });
+          }
+        });
+        longTaskObserver.observe({ type: 'longtask', buffered: true });
+      } catch {
+        // 'longtask' pode não ser suportado (WebKit/Firefox antigos) — ignora.
+      }
+    }
+
     return () => {
       window.removeEventListener('error', handleJsError);
       window.removeEventListener('error', handleResourceError, true);
@@ -144,6 +169,7 @@ export default function Diagnostics() {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('pagehide', handlePageHide);
+      if (longTaskObserver) longTaskObserver.disconnect();
     };
   }, []);
 
