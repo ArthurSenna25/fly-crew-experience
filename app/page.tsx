@@ -14,6 +14,7 @@ import FoundersSection from '@/components/landing/FoundersSectionClient';
 import TransformationSection from '@/components/landing/TransformationSectionClient';
 import CommunitySection from '@/components/landing/CommunitySectionClient';
 import FinalCTASection from '@/components/landing/FinalCTASectionClient';
+import SectionPrefetchClient from '@/components/landing/SectionPrefetchClient';
 
 const Footer = dynamic(() => import('@/components/landing/Footer'));
 
@@ -84,6 +85,15 @@ export default async function HomePage() {
       <CommunitySection />
       <FinalCTASection />
       <Footer />
+      {/*
+        SectionPrefetchClient monta <SectionPrefetch /> dentro do chunk-group
+        da rota / (via este page.tsx), NÃO do root layout. Isso alinha os 9
+        import() do prefetch ao mesmo chunk-group dos wrappers *SectionClient,
+        fazendo o webpack deduplicar cada chunk de seção em 1. Antes, montado
+        em ClientWidgets (app/layout.tsx, shared por todas as rotas), vivia em
+        chunk-group distinto e duplicava 8 das 9 seções. Ver SectionPrefetchClient.
+      */}
+      <SectionPrefetchClient />
     </main>
   );
 }
