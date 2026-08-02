@@ -100,6 +100,9 @@ token.json
 .eslintcache
 .stylelintcache
 
+# Impeccable (hook de auditoria de design) — cache local, fora do VCS (REGRA #16)
+.impeccable/
+
 # -----------------------
 # IDE
 # -----------------------
