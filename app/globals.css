@@ -324,3 +324,61 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* ── Navigation: entrance keyframes (Fase B1 — Framer → CSS) ──
+   Substituem o <motion.nav> (slide-down de entrada) e o <motion.button>
+   dos links desktop (stagger). GPU-only (transform + opacity). SSR-safe:
+   estão no bundle de CSS inicial, então o primeiro paint já reflete o
+   estado inicial (opacity:0) — equivale ao `initial` do Framer Motion no
+   SSR, sem o flash que uma injeção runtime pós-hidratação causaria (o nav
+   apareceria visível e depois sumeria + deslizaria).
+
+   prefers-reduced-motion: desligado por esta @media E pelo bloco global em
+   @layer base (que já força animation-duration:0.01ms). Defesa em
+   profundidade, mesmo padrão do HeroSection. */
+@keyframes navSlideDown {
+  from { opacity: 0; transform: translateY(-100px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.nav-slide-down { animation: navSlideDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes navLinkIn {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.nav-link-in { animation: navLinkIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* ── Mobile menu (Fase B3) — substitui os AnimatePresence/motion.* do
+      Framer por CSS puro. Dois keyframes:
+      - mobileMenuIn: entrada do painel (fade 0→1, 0.3s). ONE-SHOT no
+        mount (same convention as navSlideDown). A SAÍDA do painel é
+        via CSS `transition` (opacity→0, 0.2s), não por keyframe — ver
+        o estado `closing` no componente.
+      - mobileLinkIn: entrada escalonada dos links-botão do menu mobile
+        (opacity 0→1 + translateX -18→0, 0.45s). Substitui `linkVariants`
+        do Framer. O stagger é dado por `animation-delay` inline por item
+        (idx*0.05 + 0.12), replicando staggerChildren/delayChildren.
+      Em prefers-reduced-motion todos desligam (defesa em profundidade,
+      mesmo que o componente também gateie). */
+@keyframes mobileMenuIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+/* fill `backwards` (NÃO `both`): aplica o from{opacity:0} no frame 0,
+   evitando flash, mas NÃO persiste o to após o fim — senão o fill-lock
+   travaria opacity:1 e bloquearia a transition de SAÍDA do painel
+   (controlada inline via `closing` no componente). */
+.mobile-menu-in { animation: mobileMenuIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+
+@keyframes mobileLinkIn {
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.mobile-link-in { animation: mobileLinkIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-slide-down,
+  .nav-link-in,
+  .mobile-menu-in,
+  .mobile-link-in { animation: none; }
+}

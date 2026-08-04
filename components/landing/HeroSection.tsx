@@ -1,11 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Image from 'next/image';
 import { Container } from '@/components/ui/Container';
-import { EASE_CINEMATIC } from '@/lib/motion';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 // Placeholder minúsculo (8x5px) na cor de fundo da marca, com leve
@@ -19,16 +17,20 @@ const HERO_BLUR_DATA_URL =
 // Se não houver header fixo, deixe 0.
 const HEADER_OFFSET = 96;
 
-// Micro-animação de entrada do conteúdo do Hero — PURA em CSS (não depende
-// de hidratação do JS: a @keyframes e a classe já estão no HTML desde o SSR).
-// É um "settle" sutil de translateY (12px → 0), 480ms ease-out cúbico — SEM
-// animar opacity: no primeiro paint o texto já está visível em opacity:1
-// (garantido por initial={false} no container), o conteúdo apenas assenta de
-// leve. GPU-friendly (só `transform`). prefers-reduced-motion desliga (Regra #14).
-// Nota: aplicar SOMENTE no motion.div do conteúdo (containerReveal.visible não
-// tem `transform` → o Framer não escreve transform nesse nó, deixando a
-// keyframe CSS dona do transform — sem conflito com a escrita direta do rAF
-// no contentRef, que é um nó pai diferente).
+// Micro-animações do Hero — PURAS em CSS (não dependem de hidratação do JS:
+// as @keyframes e as classes já estão no HTML desde o SSR). GPU-friendly
+// (só `transform`/`opacity`). prefers-reduced-motion desliga conforme Regra #14.
+//
+// 1) .hero-content-rise — "settle" sutil de translateY (12px→0), 480ms ease-out.
+//    Sem animar opacity: no primeiro paint o texto já está visível em opacity:1,
+//    o conteúdo apenas assenta de leve.
+// 2) .hero-cue-fade — fade-in do scroll cue após 2.4s (1s ease-out). reduced-motion
+//    → fade rápido sem delay (0.3s), espelhando o transition original do Framer
+//    (delay: reducedMotion?0:2.4, duration: reducedMotion?0.3:1).
+// 3) .hero-cue-pulse — pulso infinito scaleY 1→0.3→1 (2.8s) da linha do scroll
+//    cue. Classe aplicada condicionalmente (isMobile||reducedMotion → omitida →
+//    estático scaleY:1, default transform). reduced-motion também coberto por
+//    @media por segurança (defesa em profundidade).
 const HERO_CONTENT_RISE_CSS = `
 @keyframes heroContentRise {
   from { transform: translateY(12px); }
@@ -37,8 +39,24 @@ const HERO_CONTENT_RISE_CSS = `
 .hero-content-rise {
   animation: heroContentRise 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+@keyframes heroCueFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.hero-cue-fade {
+  animation: heroCueFade 1s cubic-bezier(0.16, 1, 0.3, 1) 2.4s both;
+}
+@keyframes heroCuePulse {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(0.3); }
+}
+.hero-cue-pulse {
+  animation: heroCuePulse 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
 @media (prefers-reduced-motion: reduce) {
   .hero-content-rise { animation: none; }
+  .hero-cue-fade    { animation: heroCueFade 0.3s ease both; }
+  .hero-cue-pulse    { animation: none; }
 }
 `;
 
@@ -55,38 +73,6 @@ const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => 
 
   const top = el.getBoundingClientRect().top + window.scrollY - HEADER_OFFSET;
   window.scrollTo({ top, behavior: 'smooth' });
-};
-
-/* ───── Choreographed entrance variants ───── */
-const containerReveal = {
-  hidden: { opacity: 0 },
-  // Hero é above-the-fold: com initial={false} no container, o texto é
-  // renderizado direto no estado "visible" já no SSR (sem esperar hidratação
-  // do JS). Stagger/delay removidos — acionavam uma coreografia ~1.4-1.6s
-  // depois da hidratação (causa direta do LCP de 10-31s no <h1>/<p>). A
-  // entrada sutil agora é só a keyframe CSS .hero-fade-in (300ms, sem JS).
-  visible: { opacity: 1 },
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 32 },
-  visible: { opacity: 1, y: 0, transition: { duration: 1, ease: EASE_CINEMATIC } },
-};
-
-const fadeUpDelayed = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.9, ease: EASE_CINEMATIC } },
-};
-
-const scaleReveal = {
-  hidden: { opacity: 0, scale: 0.96 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 1.1, ease: EASE_CINEMATIC } },
-};
-
-// Variante "instantânea" para quem prefere menos movimento
-const instant = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.3 } },
 };
 
 export default function HeroSection() {
@@ -132,10 +118,6 @@ export default function HeroSection() {
   const contentRef = useRef<HTMLDivElement>(null);
   const heroRafRef = useRef<number | null>(null);
 
-  const entranceVariants = isMobile || reducedMotion ? instant : containerReveal;
-  const fadeUpVariant = isMobile || reducedMotion ? instant : fadeUp;
-  const fadeUpDelayedVariant = isMobile || reducedMotion ? instant : fadeUpDelayed;
-  const scaleRevealVariant = isMobile || reducedMotion ? instant : scaleReveal;
 
   // Diagnóstico de hidratação (temporário) — sinaliza que o mount efetivamente
   // terminou (passive effects rodaram). HeroSection não tinha useEffect de mount
@@ -285,21 +267,15 @@ export default function HeroSection() {
         style={{ opacity: 1, transform: 'translateY(0px)' }}
       >
         <Container>
-          {/* initial={false}: o Framer Motion NÃO aplica a fase "hidden" no
-              primeiro paint — o conteúdo é renderizado direto no estado
-              "visible" (opacity:1, sem y/sem scale), já no HTML do SSR. O
-              <h1>/<p> ficam visíveis IMEDIATAMENTE, sem esperar a hidratação
-              do JS nem a coreografia (delayChildren/staggerChildren removidos
-              de containerReveal para o Hero). Toda a entrada visual residual é
-              só CSS (.hero-content-rise), que já está no HTML desde o SSR. */}
-          <motion.div
-            initial={false}
-            animate="visible"
-            variants={entranceVariants}
-            className="hero-content-rise max-w-4xl"
-          >
-            <motion.h1
-              variants={scaleRevealVariant}
+          {/* Entrada pura em CSS: o <h1>/<p> ficam visíveis IMEDIATAMENTE no
+              primeiro paint, já no HTML do SSR — sem esperar hidratação do JS
+              nem coreografia de variant (delayChildren/staggerChildren saíram
+              junto com as variants do Framer do Hero). Toda a entrada visual
+              residual é só a @keyframes .hero-content-rise (settle translateY
+              12px→0, 480ms), injetada no <head> desde o SSR — não depende de
+              hidratação do JS. */}
+          <div className="hero-content-rise max-w-4xl">
+            <h1
               className="
                 text-[clamp(2.25rem,6vw,5rem)]
                 font-cinzel
@@ -311,15 +287,11 @@ export default function HeroSection() {
               "
             >
               Prepare-se Para <span className="text-gold-prestige">Viver a Aviação</span>
-            </motion.h1>
+            </h1>
 
-            <motion.div
-              variants={fadeUpVariant}
-              className="w-16 h-px bg-gold-prestige/40 my-8 sm:my-10"
-            />
+            <div className="w-16 h-px bg-gold-prestige/40 my-8 sm:my-10" />
 
-            <motion.p
-              variants={fadeUpDelayedVariant}
+            <p
               className="
                 text-base sm:text-lg lg:text-xl
                 text-silver-mist
@@ -332,10 +304,9 @@ export default function HeroSection() {
               A Fly Crew não é apenas uma preparação.{' '}
               <span className="text-white/90">É uma experiência de transformação profissional</span>{' '}
               criada para quem deseja conquistar os céus com Elegância, Confiança e Presença.
-            </motion.p>
+            </p>
 
-            <motion.div
-              variants={fadeUpDelayedVariant}
+            <div
               className="flex flex-col sm:flex-row gap-5 sm:gap-8 mt-10 sm:mt-12 lg:mt-14"
             >
               {/* <a href="#id"> em vez de <button onClick>: navegação para
@@ -392,31 +363,35 @@ export default function HeroSection() {
                 Quero Fazer Parte
                 <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-gold-prestige group-hover:w-full transition-all duration-700 ease-out" />
               </a>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </Container>
       </div>
 
       {/* ─── Layer 4: Scroll cue ─── */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: reducedMotion ? 0 : 2.4, duration: reducedMotion ? 0.3 : 1 }}
-        className="absolute bottom-8 sm:bottom-10 lg:bottom-12 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-3"
-      >
+      {/* Fade-in do scroll cue: .hero-cue-fade porta a @keyframes heroCueFade
+          (delay 2.4s, duration 1s) injetada no <head> desde o SSR, espelhando o
+          transition original do Framer (delay: reducedMotion?0:2.4, duration:
+          reducedMotion?0.3:1). O guard de reduced-motion vive no @media
+          (prefers-reduced-motion: reduce) dentro de HERO_CONTENT_RISE_CSS —
+          mesma media query que o hook useReducedMotion lê, então OS-settings e
+          estado React permanecem in sync; nenhum gate condicional aqui. */}
+      <div className="absolute bottom-8 sm:bottom-10 lg:bottom-12 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-3 hero-cue-fade">
         <span className="text-[0.5rem] tracking-[0.4em] uppercase text-white/20 font-montserrat font-medium">
           Explorar
         </span>
-        <motion.div
-          animate={isMobile || reducedMotion ? { scaleY: 1 } : { scaleY: [1, 0.3, 1] }}
-          transition={
-            isMobile || reducedMotion
-              ? undefined
-              : { repeat: Infinity, duration: 2.8, ease: EASE_CINEMATIC }
-          }
-          className="w-px h-8 sm:h-10 bg-gradient-to-b from-gold-prestige/60 to-transparent origin-bottom"
+        {/* Pulso infinito scaleY 1→0.3→1 (2.8s) via .hero-cue-pulse. CSS puro
+            não detecta isMobile (useIsMobile usa matchMedia de width), então o
+            gate isMobile||reducedMotion é replicado aqui condicionalmente: a
+            classe só é aplicada quando !(isMobile || reducedMotion), exatamente
+            como o animate original (isMobile||reducedMotion → scaleY:1 estático,
+            sem pulso). reduced-motion também coberto por @media por defesa em
+            profundidade. EASE_CINEMATIC (cubic-bezier(0.16,1,0.3,1)) já é o
+            timing-function da @keyframes heroCuePulse. */}
+        <div
+          className={`w-px h-8 sm:h-10 bg-gradient-to-b from-gold-prestige/60 to-transparent origin-bottom${!(isMobile || reducedMotion) ? ' hero-cue-pulse' : ''}`}
         />
-      </motion.div>
+      </div>
     </section>
   );
 }
