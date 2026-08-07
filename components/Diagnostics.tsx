@@ -12,6 +12,23 @@ type NavigatorLike = Navigator & {
   deviceMemory?: number;
 };
 
+// Marcador 1 (top-level do módulo): selado quando o JS deste chunk do
+// Diagnostics começa a ser avaliado (parse/eval do módulo). Diagnostics é
+// importado via dynamic({ ssr: false }) em ClientWidgets.tsx, então este
+// código roda DEPOIS da hidratação inicial do bundle client e depois do
+// chunk lazy baixar — captura "o JS do chunk começou a executar", não o
+// instante do freeze inicial da landing (que ocorre antes deste chunk).
+const DIAGNOSTICS_MODULE_EVAL = 'diagnostics-module-eval';
+const DIAGNOSTICS_FIRST_EFFECT = 'diagnostics-first-effect';
+// Capturado junto com o marcador 1 (top-level do módulo): ms desde
+// navigationStart no instante em que este chunk começou a avaliar. Lido
+// no beacon DiagnosticsModuleTiming (Marcador 2) como referência absoluta.
+const moduleEvalMsSinceNavStart =
+  typeof performance !== 'undefined' ? Math.round(performance.now()) : null;
+if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+  performance.mark(DIAGNOSTICS_MODULE_EVAL);
+}
+
 // Diagnóstico global de runtime (best-effort): captura erros JS, rejeições
 // não tratadas, falhas de carregamento de recurso, mudanças de visibilidade,
 // ciclo de vida da página (bfcache via pageshow/pagehide), tipo de navegação
@@ -45,6 +62,34 @@ export default function Diagnostics() {
         });
       }
     };
+
+    // Marcador 2 (primeiro useEffect): mede o delta entre a avaliação do
+    // módulo (DIAGNOSTICS_MODULE_EVAL) e o primeira execução deste effect.
+    // Como Diagnostics é dynamic({ ssr: false }), este delta reflete o tempo
+    // para baixar+parsear+avaliar este chunk lazy após a hidratação inicial —
+    // não o freeze inicial da landing (que ocorre antes deste chunk existir).
+    // enviado uma vez no mount.
+    if (
+      typeof performance !== 'undefined' &&
+      typeof performance.mark === 'function' &&
+      typeof performance.measure === 'function'
+    ) {
+      performance.mark(DIAGNOSTICS_FIRST_EFFECT);
+      try {
+        const m = performance.measure(
+          'diagnostics module-eval → first-effect',
+          DIAGNOSTICS_MODULE_EVAL,
+          DIAGNOSTICS_FIRST_EFFECT,
+        );
+        send('DiagnosticsModuleTiming', 'first effect delta', {
+          moduleEvalToFirstEffectMs: Math.round(m.duration),
+          moduleEvalMsSinceNavStart,
+        });
+      } catch {
+        // marker de início pode não existir se performance.mark falhou no
+        // top-level (ambiente sem API) — ignora silenciosamente.
+      }
+    }
 
     // (a) Erros JS não capturados (fase de bubble).
     const handleJsError = (e: ErrorEvent) => {
@@ -170,6 +215,72 @@ export default function Diagnostics() {
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('pagehide', handlePageHide);
       if (longTaskObserver) longTaskObserver.disconnect();
+    };
+  }, []);
+
+  // Interceptor de console.error/warn (mismatch de hidratação): o React
+  // emite "Hydration failed because the server rendered HTML didn't match
+  // the client." e "Text content does not match server-rendered HTML." via
+  // console.error (não via window 'error' — não borbulha como ErrorEvent),
+  // então o listener (a) acima não os captura. Um re-render de hidratação
+  // forçado é caro e suspeito de contribuir com o freeze de 4-15s no cache
+  // frio do iPhone. Reporta qualquer chamada contendo "hydrat" ou
+  // "did not match" (case-insensitive). Restaura os originais no cleanup
+  // para não vazar em navegação SPA. Tem seu próprio send (cópia local do
+  // helper de beacon) para NÃO alterar o useEffect existente acima
+  // ("só adicione"), cujos listeners estão congelados por contrato.
+  useEffect(() => {
+    const send = (
+      tag: string,
+      msg: string,
+      extra?: Record<string, unknown>,
+    ) => {
+      const payload: {
+        tag: string;
+        msg: string;
+        extra?: Record<string, unknown>;
+      } = { tag, msg };
+      if (extra) payload.extra = extra;
+      const bodyStr = JSON.stringify(payload);
+      if (
+        typeof navigator !== 'undefined' &&
+        typeof navigator.sendBeacon === 'function'
+      ) {
+        navigator.sendBeacon('/api/debug-log', bodyStr);
+      } else {
+        fetch('/api/debug-log', {
+          method: 'POST',
+          body: bodyStr,
+          keepalive: true,
+        });
+      }
+    };
+
+    const originalError = console.error;
+    const originalWarn = console.warn;
+
+    const checkAndReport = (args: unknown[], level: string) => {
+      const text = args.map((a) => String(a)).join(' ');
+      if (/hydrat/i.test(text) || /did not match/i.test(text)) {
+        send('DiagnosticsHydration', 'mismatch detected', {
+          level,
+          message: text.slice(0, 500),
+        });
+      }
+    };
+
+    console.error = (...args: unknown[]) => {
+      checkAndReport(args, 'error');
+      originalError.apply(console, args);
+    };
+    console.warn = (...args: unknown[]) => {
+      checkAndReport(args, 'warn');
+      originalWarn.apply(console, args);
+    };
+
+    return () => {
+      console.error = originalError;
+      console.warn = originalWarn;
     };
   }, []);
 
