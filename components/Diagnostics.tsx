@@ -91,6 +91,35 @@ export default function Diagnostics() {
       }
     }
 
+    // (i) Heartbeat da thread principal — setInterval a cada 250ms, iniciado
+    // o mais cedo possível no mount. Cada tick mede o delta desde o tick
+    // anterior; se delta > 1000ms (4x o esperado), a thread esteve bloqueada
+    // nesse intervalo. Comparado com os beacons de setTimeout do
+    // SectionPrefetch, isto distingue thread parada (heartbeat também atrasa)
+    // de algo isolado ao timer do prefetch (heartbeat permanece normal). Um
+    // beacon no tick 1 confirma quando o heartbeat começou (timestamp
+    // absoluto, performance.now()).
+    const heartbeatState = { lastTick: performance.now(), count: 0 };
+    const heartbeatId = setInterval(() => {
+      const now = performance.now();
+      const delta = now - heartbeatState.lastTick;
+      heartbeatState.lastTick = now;
+      heartbeatState.count += 1;
+      if (heartbeatState.count === 1) {
+        send('DiagnosticsHeartbeat', 'heartbeat started', {
+          startedAtMs: Math.round(now),
+          tickNumber: heartbeatState.count,
+        });
+      }
+      if (delta > 1000) {
+        send('DiagnosticsHeartbeat', 'gap detected', {
+          expectedMs: 250,
+          actualDeltaMs: Math.round(delta),
+          tickNumber: heartbeatState.count,
+        });
+      }
+    }, 250);
+
     // (a) Erros JS não capturados (fase de bubble).
     const handleJsError = (e: ErrorEvent) => {
       send('DiagnosticsError', 'js error', {
@@ -215,6 +244,7 @@ export default function Diagnostics() {
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('pagehide', handlePageHide);
       if (longTaskObserver) longTaskObserver.disconnect();
+      clearInterval(heartbeatId);
     };
   }, []);
 
