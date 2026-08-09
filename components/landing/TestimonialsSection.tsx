@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef, useId } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import { motion, AnimatePresence, PanInfo, Variants } from 'framer-motion';
 import { Star, ChevronLeft, ChevronRight, Quote } from 'lucide-react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -340,26 +341,11 @@ export default function TestimonialsSection() {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'TestimonialsSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'TestimonialsSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'TestimonialsSection',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   if (loading) {

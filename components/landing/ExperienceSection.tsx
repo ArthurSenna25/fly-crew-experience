@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { EASE_CINEMATIC } from '@/lib/motion';
@@ -203,26 +204,11 @@ export default function ExperienceSection() {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'ExperienceSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'ExperienceSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'ExperienceSection',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   return (

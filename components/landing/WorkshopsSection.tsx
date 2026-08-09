@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useId, useEffect } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Users, Clock, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -338,26 +339,11 @@ export default function WorkshopsSection({ workshops }: WorkshopsSectionProps) {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'WorkshopsSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'WorkshopsSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'WorkshopsSection',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   return (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -50,26 +51,11 @@ export default function NewsletterForm() {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'NewsletterForm',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'NewsletterForm',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'NewsletterForm',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
 
     return () => {
       input.removeEventListener('focus', onFocus);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import { ArrowUpRight } from 'lucide-react';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { Container } from '@/components/ui/Container';
@@ -42,26 +43,11 @@ export default function ManifestoSection() {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'ManifestoSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'ManifestoSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'ManifestoSection',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   return (

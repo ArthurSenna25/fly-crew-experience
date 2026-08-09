@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { useInViewSafe } from '@/hooks/use-in-view-safe';
@@ -593,26 +594,11 @@ export default function GallerySection({ galleries }: { galleries: GalleryItem[]
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'GallerySection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'GallerySection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'GallerySection',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   if (galleries.length === 0) return null;

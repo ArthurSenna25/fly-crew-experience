@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Instagram, Mail } from 'lucide-react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import Link from 'next/link';
 
 export default function Footer() {
@@ -36,26 +37,11 @@ export default function Footer() {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'Footer',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'Footer',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'Footer',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   return (
@@ -114,6 +100,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/admin/login"
+                  prefetch={false}
                   className="text-sm text-silver-mist/50 hover:text-gold-prestige transition-colors font-montserrat"
                 >
                   Admin
@@ -147,6 +134,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/privacy"
+                  prefetch={false}
                   className="text-xs text-silver-mist/70 hover:text-gold-prestige font-montserrat"
                 >
                   Politica de Privacidade

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ChevronDown, CheckCircle } from 'lucide-react';
@@ -60,26 +61,11 @@ export default function WorkshopBookingForm({ workshops }: WorkshopBookingFormPr
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'WorkshopBookingForm',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'WorkshopBookingForm',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'WorkshopBookingForm',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

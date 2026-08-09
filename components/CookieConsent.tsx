@@ -104,7 +104,7 @@ export default function CookieConsent() {
               Utilizamos cookies essenciais para o funcionamento do site, em conformidade com a{" "}
               <strong className="text-white">LGPD</strong>. Você pode aceitar todos ou apenas os
               essenciais. Saiba mais em nossa{" "}
-              <Link href="/privacy" className="text-gold-prestige underline">
+              <Link href="/privacy" prefetch={false} className="text-gold-prestige underline">
                 Política de Privacidade
               </Link>
               .

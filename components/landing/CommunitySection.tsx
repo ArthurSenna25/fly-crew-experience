@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import { motion } from 'framer-motion';
 import { useInViewSafe } from '../../hooks/use-in-view-safe';
 import { Section } from '@/components/ui/Section';
@@ -47,26 +48,11 @@ export default function CommunitySection() {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'CommunitySection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'CommunitySection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'CommunitySection',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   return (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import { motion } from 'framer-motion';
 import { useInViewSafe } from '@/hooks/use-in-view-safe';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -88,26 +89,11 @@ export default function FoundersSection() {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'FoundersSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'FoundersSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'FoundersSection',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   // Parallax scroll-driven do wrapper (opacity + scale) via rAF + escrita

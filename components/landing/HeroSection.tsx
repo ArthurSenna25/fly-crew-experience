@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Image from 'next/image';
 import { Container } from '@/components/ui/Container';
@@ -135,26 +136,11 @@ export default function HeroSection() {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'HeroSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'HeroSection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'HeroSection',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   // ─── Scroll-driven parallax (rAF + direct DOM, replaces useScroll/useTransform) ───

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 
 // useLayoutEffect mede/sincroniza o DOM ANTES do paint — essencial para um
 // FLIP sem flicker (precisamos aplicar o "invert" antes de o usuário ver a
@@ -250,26 +251,11 @@ export default function Navigation() {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'Navigation',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'Navigation',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'Navigation',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
 
     return () => observer.disconnect();
   }, []);

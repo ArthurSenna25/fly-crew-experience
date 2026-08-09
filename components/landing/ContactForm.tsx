@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import { motion } from 'framer-motion';
 import { useInViewSafe } from '../../hooks/use-in-view-safe';
 import { toast } from 'sonner';
@@ -56,26 +57,11 @@ export default function ContactForm({ className = '' }: ContactFormProps) {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'ContactForm',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'ContactForm',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'ContactForm',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   const validateEmail = (email: string) => {

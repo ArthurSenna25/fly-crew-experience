@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 import Image from 'next/image';
 import { useInView, motion } from 'framer-motion';
 import { Container } from '@/components/ui/Container';
@@ -96,26 +97,11 @@ export default function FinalCTASection() {
       ? Math.round(performance.now() - markEntry.startTime)
       : null;
 
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(
-        '/api/debug-log',
-        JSON.stringify({
-          tag: 'FinalCTASection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-      );
-    } else {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag: 'FinalCTASection',
-          msg: 'mount effects complete',
-          msSinceMark,
-        }),
-        keepalive: true,
-      });
-    }
+    queueDebugLog({
+      tag: 'FinalCTASection',
+      msg: 'mount effects complete',
+      msSinceMark,
+    });
   }, []);
 
   return (
