@@ -309,26 +309,6 @@ export default function Navigation() {
     const container = linksContainerRef.current;
     if (!underline || !container) return;
 
-    // BISSEÇÃO — TESTE DE ISOLAMENTO (não restaurar ainda). Hipótese B.
-    // Corpo do FLIP do underline DESATIVADO: retorna cedo, ANTES de qualquer
-    // getBoundingClientRect/cálculo/mola/rAF (o guard de null acima é só
-    // leitura de ref, não medição). Se o travamento de thread no iOS Safari
-    // sumir com isto, o suspeito é o loop de rAF da mola (critério de
-    // settling que pode nunca bater → rAF rodando indefinidamente) ou
-    // re-trigger constante do effect por activeSection oscilar no
-    // IntersectionObserver. O underline fica sem animação/posicionamento
-    // nesta versão — esperado e aceitável temporariamente. Reverter após o
-    // teste em produção confirmar/descartar a variável.
-    //
-    // `true as boolean` (tipo não-literal, não `true`) impede o TS de marcar
-    // o corpo FLIP abaixo como unreachable. Um `return;` puro faria o TS
-    // perder o narrowing de null do guard acima → 16 erros TS18047/TS2345 no
-    // código inerte. Com `as boolean` o branch fica "reachable" para o
-    // analisador (narrowing de underline/container persiste), mas em runtime
-    // sempre retorna cedo — antes de qualquer getBoundingClientRect/mola/rAF.
-    const flipDisabled = true as boolean;
-    if (flipDisabled) return;
-
     // Sem seção ativa, ou seção sem link correspondente na nav (ex:
     // 'community' não está em LINKS) → esconde o underline. Espelha o
     // comportamento original, onde nenhum link isActive → nenhum
