@@ -1,11 +1,6 @@
 'use client';
 
-// BISSEÇÃO — TESTE DE ISOLAMENTO (não restaurar ainda).
-// <SectionPrefetch /> desmontado temporariamente para isolar variável na
-// investigação do travamento de thread no iOS Safari. Hipótese A: o
-// SectionPrefetch pode estar competindo por thread pior do que assumíamos.
-// Reverter após o teste em produção confirmar/descartar essa variável.
-// import SectionPrefetch from '@/components/SectionPrefetch';
+import SectionPrefetch from '@/components/SectionPrefetch';
 
 /**
  * SectionPrefetchClient — thin Client Component wrapper que monta
@@ -38,7 +33,5 @@
  * em app/page.tsx não passa nada.
  */
 export default function SectionPrefetchClient() {
-  // BISSEÇÃO — TESTE DE ISOLAMENTO: retorna null em vez de montar
-  // <SectionPrefetch/>. Ver comentário no topo do arquivo. Reverter depois.
-  return null;
+  return <SectionPrefetch />;
 }

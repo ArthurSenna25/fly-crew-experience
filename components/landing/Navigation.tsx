@@ -493,6 +493,7 @@ export default function Navigation() {
   };
 
   return (
+    <>
     <nav
       className="nav-slide-down fixed top-0 w-full z-50"
       aria-label="Navegação principal"
@@ -696,104 +697,6 @@ export default function Navigation() {
             </span>
           </button>
         </div>
-
-        {/* Mobile Menu — dialog completo: focus trap, Escape, scroll lock.
-            Ativo até xl, mesmo breakpoint do toggle acima. */}
-        {/* Mobile Menu — dialog completo: focus trap, Escape, scroll lock.
-            Fase B3: substitui <AnimatePresence>+motion.* por render em
-            `menuMounted` (mobileOpen || closing). Entrada: .mobile-menu-in
-            (opacity 0→1, 0.3s) + .mobile-link-in escalonado (animation-delay
-            idx*0.05+0.12). Saída: transition opacity→0 (MENU_CLOSE_DURATION)
-            enquanto `closing` adia o desmount (unmount-deferred). As classes
-            de entrada são gateadas em `mobileOpen` (não em menuMounted) pra
-            serem removidas no fechamento → animation cancelada → transition
-            de saída limpa (evita briga animation×transition em toggle
-            rápido). Escape segue instantâneo (emil-design-eng: não animar
-            ação iniciada por teclado). */}
-        {menuMounted && (
-          <div
-            ref={menuRef}
-            id={menuId}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menu de navegação"
-            className={cn(
-              'fixed inset-x-3 top-20 bottom-3 z-40 overflow-y-auto rounded-3xl border border-white/10 bg-executive-black shadow-2xl xl:hidden',
-              mobileOpen && 'mobile-menu-in',
-              mobileOpen ? 'opacity-100' : 'opacity-0',
-            )}
-            style={{
-              transition: reducedMotion ? 'none' : `opacity ${MENU_CLOSE_DURATION}s ${CSS_EASE}`,
-              backgroundImage:
-                'radial-gradient(120% 60% at 50% 0%, rgba(212,175,55,0.06) 0%, transparent 60%)',
-            }}
-            data-testid="mobile-menu"
-          >
-            <div className="flex min-h-full flex-col gap-2 px-6 pb-6 pt-8">
-              <nav className="flex flex-col gap-1" aria-label="Seções do site">
-                {LINKS.map((link, idx) => {
-                  const isActive = activeSection === link.id;
-                  return (
-                    <button
-                      key={link.id}
-                      onClick={() => scrollTo(link.id)}
-                      className={cn(
-                        'group flex items-center gap-4 rounded-lg px-3 py-3.5 text-left transition-colors duration-200',
-                        mobileOpen && 'mobile-link-in',
-                        isActive
-                          ? 'text-gold-prestige'
-                          : 'text-silver-mist hover:bg-white/5 hover:text-white',
-                      )}
-                      style={{
-                        animationDuration: reducedMotion ? '0ms' : `${LINK_DURATION * 1000}ms`,
-                        animationDelay: reducedMotion
-                          ? '0ms'
-                          : `${(LINK_DELAY_BASE + idx * LINK_STAGER) * 1000}ms`,
-                      }}
-                      aria-current={isActive ? 'true' : undefined}
-                    >
-                      <span
-                        className={cn(
-                          'numeral-mark text-2xl',
-                          isActive && 'text-gold-prestige/40',
-                        )}
-                        aria-hidden="true"
-                      >
-                        {String(idx + 1).padStart(2, '0')}
-                      </span>
-                      <span className="font-inter text-xl font-medium tracking-wide">
-                        {link.label}
-                      </span>
-                      {isActive && (
-                        <span
-                          aria-hidden="true"
-                          className="ml-auto h-1.5 w-1.5 rounded-full bg-gold-prestige"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </nav>
-
-              <button
-                onClick={() => scrollTo('contact')}
-                className={cn(
-                  'mt-4 flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-gold-prestige bg-gold-prestige/10 px-6 py-4 text-sm font-semibold uppercase tracking-wider text-gold-prestige transition-colors duration-300 hover:bg-gold-prestige hover:text-executive-black',
-                  mobileOpen && 'mobile-link-in',
-                )}
-                style={{
-                  animationDuration: reducedMotion ? '0ms' : `${LINK_DURATION * 1000}ms`,
-                  animationDelay: reducedMotion
-                    ? '0ms'
-                    : `${(LINK_DELAY_BASE + LINKS.length * LINK_STAGER) * 1000}ms`,
-                }}
-              >
-                Quero Fazer Parte
-                <ArrowUpRight size={16} className="shrink-0" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Barra de progresso de leitura — hairline de 2px, transform-only.
@@ -806,5 +709,123 @@ export default function Navigation() {
         style={{ transform: 'scaleX(0)' }}
       />
     </nav>
+
+      {/*
+        Mobile Menu — dialog completo: focus trap, Escape, scroll lock.
+        ELEVADO PARA FORA DO <nav> (bugfix da regressão Fase B3): antes, este
+        painel `position:fixed` era filho do <nav>, que carrega
+        `.nav-slide-down` (globals.css: `@keyframes navSlideDown { to {
+        transform: translateY(0) } }` com `animation-fill-mode:both`). O fill
+        `both` persiste `transform: translateY(0)` != `none` no <nav>, e,
+        per specs CSS (texcontainingblock), qualquer `transform` != `none`
+        num ancestral vira containing block de descendentes fixed → o painel
+        passava a se posicionar relativo ao <nav> em vez do viewport. Em
+        layout/coords desktop isso acidentalmente funcionava, mas a regra
+        fixa `fixed inset-x-3 top-20 bottom-3` ficava presa nos limites do
+        <nav> (top:0, w-full) — e em vários viewports o painel não cobria o
+        agony visível ou aparecia atrás/clipped, dando a sensação de "menu
+        não abre" (na verdade não abria num lugar visível). Mover para fora
+        do <nav> (irmão dele, sob o fragmento) elimina o containing block
+        transformado — `fixed` volta a ser relativo ao viewport. Mesma
+        técnica já usada para isolar a camada de fundo com backdrop-filter
+        (ver comentário no <div aria-hidden> acima), que pelo MESMO motivo
+        também foi separada do <nav>.
+      */}
+      {/* Fase B3 detalhes de animação (inalterados pela bugfix): substitui
+          <AnimatePresence>+motion.* por render em `menuMounted`
+          (mobileOpen || closing). Entrada: .mobile-menu-in (opacity 0→1,
+          0.3s) + .mobile-link-in escalonado (animation-delay idx*0.05+0.12).
+          Saída: transition opacity→0 (MENU_CLOSE_DURATION) enquanto `closing`
+          adia o desmount (unmount-deferred). As classes de entrada são
+          gateadas em `mobileOpen` (não em menuMounted) pra serem removidas
+          no fechamento → animation cancelada → transition de saída limpa
+          (evita briga animation×transition em toggle rápido). Escape segue
+          instantâneo (emil-design-eng: não animar ação iniciada por teclado).
+      */}
+      {menuMounted && (
+        <div
+          ref={menuRef}
+          id={menuId}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu de navegação"
+          className={cn(
+            'fixed inset-x-3 top-20 bottom-3 z-40 overflow-y-auto rounded-3xl border border-white/10 bg-executive-black shadow-2xl xl:hidden',
+            mobileOpen && 'mobile-menu-in',
+            mobileOpen ? 'opacity-100' : 'opacity-0',
+          )}
+          style={{
+            transition: reducedMotion ? 'none' : `opacity ${MENU_CLOSE_DURATION}s ${CSS_EASE}`,
+            backgroundImage:
+              'radial-gradient(120% 60% at 50% 0%, rgba(212,175,55,0.06) 0%, transparent 60%)',
+          }}
+          data-testid="mobile-menu"
+        >
+          <div className="flex min-h-full flex-col gap-2 px-6 pb-6 pt-8">
+            <nav className="flex flex-col gap-1" aria-label="Seções do site">
+              {LINKS.map((link, idx) => {
+                const isActive = activeSection === link.id;
+                return (
+                  <button
+                    key={link.id}
+                    onClick={() => scrollTo(link.id)}
+                    className={cn(
+                      'group flex items-center gap-4 rounded-lg px-3 py-3.5 text-left transition-colors duration-200',
+                      mobileOpen && 'mobile-link-in',
+                      isActive
+                        ? 'text-gold-prestige'
+                        : 'text-silver-mist hover:bg-white/5 hover:text-white',
+                    )}
+                    style={{
+                      animationDuration: reducedMotion ? '0ms' : `${LINK_DURATION * 1000}ms`,
+                      animationDelay: reducedMotion
+                        ? '0ms'
+                        : `${(LINK_DELAY_BASE + idx * LINK_STAGER) * 1000}ms`,
+                    }}
+                    aria-current={isActive ? 'true' : undefined}
+                  >
+                    <span
+                      className={cn(
+                        'numeral-mark text-2xl',
+                        isActive && 'text-gold-prestige/40',
+                      )}
+                      aria-hidden="true"
+                    >
+                      {String(idx + 1).padStart(2, '0')}
+                    </span>
+                    <span className="font-inter text-xl font-medium tracking-wide">
+                      {link.label}
+                    </span>
+                    {isActive && (
+                      <span
+                        aria-hidden="true"
+                        className="ml-auto h-1.5 w-1.5 rounded-full bg-gold-prestige"
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            <button
+              onClick={() => scrollTo('contact')}
+              className={cn(
+                'mt-4 flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-gold-prestige bg-gold-prestige/10 px-6 py-4 text-sm font-semibold uppercase tracking-wider text-gold-prestige transition-colors duration-300 hover:bg-gold-prestige hover:text-executive-black',
+                mobileOpen && 'mobile-link-in',
+              )}
+              style={{
+                animationDuration: reducedMotion ? '0ms' : `${LINK_DURATION * 1000}ms`,
+                animationDelay: reducedMotion
+                  ? '0ms'
+                  : `${(LINK_DELAY_BASE + LINKS.length * LINK_STAGER) * 1000}ms`,
+              }}
+            >
+              Quero Fazer Parte
+              <ArrowUpRight size={16} className="shrink-0" />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
