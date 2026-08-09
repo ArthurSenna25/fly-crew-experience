@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { queueDebugLog, type DebugLogEntry } from '@/lib/debug-log-batch';
 
 type NetworkInformationLike = {
   effectiveType?: string;
@@ -63,6 +64,20 @@ export default function Diagnostics() {
       }
     };
 
+    // Adapter para beacons BATCHED (boot one-shots + heartbeat + longtask):
+    // mesma assinatura de send(), mas enfileira no lote único de
+    // lib/debug-log-batch.ts em vez de disparar POST imediato. Beacons
+    // imediatos (erros, visibility, lifecycle) continuam usando send().
+    const sendBatched = (
+      tag: string,
+      msg: string,
+      extra?: Record<string, unknown>,
+    ) => {
+      const entry: DebugLogEntry = { tag, msg };
+      if (extra) entry.extra = extra;
+      queueDebugLog(entry);
+    };
+
     // Marcador 2 (primeiro useEffect): mede o delta entre a avaliação do
     // módulo (DIAGNOSTICS_MODULE_EVAL) e o primeira execução deste effect.
     // Como Diagnostics é dynamic({ ssr: false }), este delta reflete o tempo
@@ -81,7 +96,7 @@ export default function Diagnostics() {
           DIAGNOSTICS_MODULE_EVAL,
           DIAGNOSTICS_FIRST_EFFECT,
         );
-        send('DiagnosticsModuleTiming', 'first effect delta', {
+        sendBatched('DiagnosticsModuleTiming', 'first effect delta', {
           moduleEvalToFirstEffectMs: Math.round(m.duration),
           moduleEvalMsSinceNavStart,
         });
@@ -99,6 +114,10 @@ export default function Diagnostics() {
     // de algo isolado ao timer do prefetch (heartbeat permanece normal). Um
     // beacon no tick 1 confirma quando o heartbeat começou (timestamp
     // absoluto, performance.now()).
+    // Auto-desliga após ~20s (80 ticks a 250ms): tempo suficiente para
+    // capturar o freeze de boot que estamos investigando, sem manter o
+    // intervalo rodando (e gerando beacons de gap) pelo resto da sessão.
+    const HEARTBEAT_MAX_TICKS = 80;
     const heartbeatState = { lastTick: performance.now(), count: 0 };
     const heartbeatId = setInterval(() => {
       const now = performance.now();
@@ -106,17 +125,20 @@ export default function Diagnostics() {
       heartbeatState.lastTick = now;
       heartbeatState.count += 1;
       if (heartbeatState.count === 1) {
-        send('DiagnosticsHeartbeat', 'heartbeat started', {
+        sendBatched('DiagnosticsHeartbeat', 'heartbeat started', {
           startedAtMs: Math.round(now),
           tickNumber: heartbeatState.count,
         });
       }
       if (delta > 1000) {
-        send('DiagnosticsHeartbeat', 'gap detected', {
+        sendBatched('DiagnosticsHeartbeat', 'gap detected', {
           expectedMs: 250,
           actualDeltaMs: Math.round(delta),
           tickNumber: heartbeatState.count,
         });
+      }
+      if (heartbeatState.count >= HEARTBEAT_MAX_TICKS) {
+        clearInterval(heartbeatId);
       }
     }, 250);
 
@@ -191,7 +213,7 @@ export default function Diagnostics() {
       | PerformanceNavigationTiming
       | undefined;
     if (navEntry) {
-      send('DiagnosticsNavigation', 'page load type', {
+      sendBatched('DiagnosticsNavigation', 'page load type', {
         type: navEntry.type,
         transferSize: navEntry.transferSize,
         domContentLoaded: Math.round(navEntry.domContentLoadedEventEnd),
@@ -203,7 +225,7 @@ export default function Diagnostics() {
     // connection/deviceMemory).
     const nav = navigator as NavigatorLike;
     const conn = nav.connection;
-    send('DiagnosticsDevice', 'device info', {
+    sendBatched('DiagnosticsDevice', 'device info', {
       effectiveType: conn?.effectiveType ?? null,
       downlink: conn?.downlink ?? null,
       deviceMemory: nav.deviceMemory ?? null,
@@ -223,7 +245,7 @@ export default function Diagnostics() {
       try {
         longTaskObserver = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
-            send('DiagnosticsLongTask', 'main thread blocked', {
+            sendBatched('DiagnosticsLongTask', 'main thread blocked', {
               duration: Math.round(entry.duration),
               startTime: Math.round(entry.startTime),
               name: entry.name,

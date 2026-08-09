@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { queueDebugLog } from '@/lib/debug-log-batch';
 
 /**
  * SectionPrefetch — aquecedor de cache best-effort para os 9 chunks de seção
@@ -72,34 +73,25 @@ export default function SectionPrefetch() {
     // o dispatch — falha de telemetria não é falha de prefetch. Todos os
     // valores enviados são literais curtas controladas (tags, slugs de seção,
     // enums, números) — nada de user input, nada que precise de truncamento.
+    // Todos os beacons do SectionPrefetch (dispatch scheduled / prefetch
+    // started / chunk loaded|failed / dispatch aborted) vão pelo lote único
+    // de lib/debug-log-batch.ts — 1 POST batched no lugar de ~11 individuais,
+    // fora da janela crítica de boot. Nunca bloqueia o dispatch: falha de
+    // telemetria não é falha de prefetch. (send vira um adapter fino sobre
+    // queueDebugLog; os call-sites `send('SectionPrefetch', ...)` ficam
+    // inalterados — só o corpo desta função muda.)
     const send = (
       tag: string,
       msg: string,
       extra?: Record<string, unknown>,
     ) => {
-      const payload: {
+      const entry: {
         tag: string;
         msg: string;
         extra?: Record<string, unknown>;
       } = { tag, msg };
-      if (extra) payload.extra = extra;
-      const bodyStr = JSON.stringify(payload);
-      try {
-        if (
-          typeof navigator !== 'undefined' &&
-          typeof navigator.sendBeacon === 'function'
-        ) {
-          navigator.sendBeacon('/api/debug-log', bodyStr);
-        } else if (typeof fetch === 'function') {
-          void fetch('/api/debug-log', {
-            method: 'POST',
-            body: bodyStr,
-            keepalive: true,
-          });
-        }
-      } catch {
-        // best-effort: telemetria nunca deve quebrar o prefetch.
-      }
+      if (extra) entry.extra = extra;
+      queueDebugLog(entry);
     };
 
     const nav = navigator as NavigatorLike;

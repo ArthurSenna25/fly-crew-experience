@@ -16,19 +16,25 @@ const logEntry = (entry: DebugLogEntry): void => {
   console.log(`[DEBUG-LOG]${label} ${msg}${delta}${extraStr}`);
 };
 
-// Aceita tanto um objeto ÚNICO (beacons imediatos: heartbeat do Diagnostics,
-// erros, lifecycle, SectionPrefetch) quanto um ARRAY de objetos (lote batched
-// de "mount effects complete" enviado pela fila em lib/debug-log-batch.ts).
-// Loga cada entrada no mesmo formato, independente de ter vindo sozinha ou em
-// lote — mantendo compatibilidade total com os chamadores existentes.
+// Aceita três formas de payload, logando cada entrada no mesmo formato
+// canônico, independente de ter vindo sozinha ou em lote:
+//  1. objeto único — beacons imediatos (erros, visibility, lifecycle,
+//     hydration mismatch do Diagnostics) seguem individuais.
+//  2. envelopado { events: [...] } — lote batched de lib/debug-log-batch.ts
+//     (mount effects + boot diagnostics + section prefetch + longtask).
+//  3. array puro — tolerância/legado.
 export async function POST(request: Request) {
   const body = await request.json();
+  let entries: DebugLogEntry[];
   if (Array.isArray(body)) {
-    for (const entry of body) {
-      logEntry(entry as DebugLogEntry);
-    }
+    entries = body as DebugLogEntry[];
+  } else if (body && Array.isArray((body as { events?: unknown }).events)) {
+    entries = (body as { events: DebugLogEntry[] }).events;
   } else {
-    logEntry(body as DebugLogEntry);
+    entries = [body as DebugLogEntry];
+  }
+  for (const entry of entries) {
+    logEntry(entry);
   }
 
   return NextResponse.json({ ok: true });
