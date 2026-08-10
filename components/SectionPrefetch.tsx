@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { getImageProps } from 'next/image';
 import { queueDebugLog } from '@/lib/debug-log-batch';
 
 /**
@@ -174,6 +175,67 @@ export default function SectionPrefetch() {
       trackImport('testimonials', import('@/components/landing/TestimonialsSection'));
       trackImport('community', import('@/components/landing/CommunitySection'));
       trackImport('finalCta', import('@/components/landing/FinalCTASection'));
+
+      // Aquece o cache de borda da Vercel para as imagens "hero" LOCAIS das
+      // seções lazy (Founders ×2, Manifesto, FinalCTA). Os trackImport acima só
+      // carregam o JS do chunk — NÃO montam o componente, então NÃO disparam a
+      // busca da imagem. Pré-buscamos a imagem explicitamente para que, ao
+      // montar a seção no scroll, a combinação imagem+largura+qualidade já
+      // esteja no cache de borda (HIT) em vez de sob demanda (MISS = trava
+      // relatado). Gallery/Workshops/Testimonials usam Cloudinary (carrossel,
+      // muitas imagens) e já têm preconnect em app/page.tsx — não pré-aquecem
+      // aqui (contraproducente, ver tarefa anterior).
+      //
+      // URL byte-exata via getImageProps (mesma API do next/image que gera o
+      // srcset real do <Image>): a URL aquecida bate exatamente com a que o
+      // navegador pedirá ao montar — sem replicar o loader manualmente (risco
+      // de drift se o formato do /_next/image mudar). quality:75 = default de
+      // todos os <Image> destas 4 seções (nenhum seta quality explícita).
+      // deviceSizes default (next.config.js não sobrescreve) → srcset cobre
+      // [640,750,828,1080,1200,1920,2048,3840]; pulamos 3840 (4K) — público
+      // raro e transformação pesada (mesmo teto do warm pós-deploy, se reintroduzido).
+      // ponytail: ceiling — 4 imgs × ~7 larguras ≈ 28 fetches de imagem em
+      // background idle. Se analytics mostrar custo real, reduzir para um warm
+      // viewport-aware (1 largura por imagem) lendo window.innerWidth vs o
+      // descriptor sizes, em vez de srcset cheio.
+      const warmImage = (section: string, src: string, sizes: string) => {
+        let urls: string[] = [];
+        try {
+          const { props } = getImageProps({
+            src,
+            alt: '',
+            fill: true,
+            sizes,
+            quality: 75,
+          });
+          const srcSet = (props as { srcSet?: string }).srcSet ?? '';
+          // srcSet = "url1 640w, url2 750w, ..." — url NÃO contém spaces/vírgulas
+          // (encodeURIComponent em /_next/image garante), então split(',') +
+          // split(/\s+/) separa entrada/url do descriptor "Nw".
+          urls = srcSet
+            .split(',')
+            .map((entry) => {
+              const [url, descriptor] = entry.trim().split(/\s+/);
+              const wMatch = descriptor?.match(/(\d+)w$/);
+              return { url, w: wMatch ? Number(wMatch[1]) : 0 };
+            })
+            .filter((e) => e.url && e.w > 0 && e.w !== 3840)
+            .map((e) => e.url);
+        } catch {
+          // best-effort: warm falha silencioso — não derruba o prefetch de JS.
+        }
+        for (const u of urls) {
+          const img = new Image();
+          img.onerror = () =>
+            send('SectionPrefetch', 'image warm failed', { section, url: u });
+          img.src = u;
+        }
+      };
+      send('SectionPrefetch', 'image warm scheduled', { images: 4 });
+      warmImage('founders-nathalie', '/images/founders/nathalie.jpeg', '(max-width: 768px) 100vw, 33vw');
+      warmImage('founders-thais', '/images/founders/thais.jpeg', '(max-width: 768px) 100vw, 33vw');
+      warmImage('manifesto', '/images/manifesto/manifesto-image.png', '(max-width: 768px) 100vw, 50vw');
+      warmImage('finalCta', '/images/finalCTA/final-cta-image.png', '100vw');
     };
 
     // requestIdleCallback não existe no Safari/iOS — o fallback setTimeout é o
