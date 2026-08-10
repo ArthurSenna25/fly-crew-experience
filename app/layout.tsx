@@ -124,6 +124,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       suppressHydrationWarning
     >
       <head>
+        {/* preconnect/dns-prefetch de res.cloudinary.com vivem em app/page.tsx
+            (rota /), escopados às 3 seções que realmente usam Cloudinary
+            (Gallery, Workshops, Testimonials) — evita abrir socket TLS
+            especulativo em /privacy e /admin, cujos browsers nunca buscam
+            res.cloudinary.com (uploads do admin vão server-side via o SDK do
+            cloudinary, não pelo browser). */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}

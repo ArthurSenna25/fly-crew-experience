@@ -73,6 +73,27 @@ export default async function HomePage() {
 
   return (
     <main className="bg-executive-black min-h-screen">
+      {/*
+        Preconnecta ao CDN de imagens Cloudinary antes do primeiro <Image>
+        remoto precisar do socket. Evidência de produção (Network tab): a
+        PRIMEIRA imagem de res.cloudinary.com demora 8+ s (DNS+TCP+TLS
+        handshake pago só na 1ª requisição a um domínio externo novo), e as
+        seguintes carregam instantâneo — assinatura de custo de handshake, não
+        peso de imagem nem bloqueio de JS. Hero/Founders/FinalCTA/logo escapam
+        porque são /public (mesma origem). Recomendação documentada do Next.js
+        para hosts em images.remotePatterns; <link> renderizado por Server
+        Component é hoisted ao <head> no SSR (App Router).
+
+        Escopo aqui (NÃO em app/layout.tsx) para emitir só na rota /, onde
+        vivem as 3 seções que consomem Cloudinary: GallerySection (grid +
+        carrossel), WorkshopsSection e TestimonialsSection (avatar) — todas via
+        /api/upload → lib/cloudinary secure_url. /privacy e /admin não buscam
+        res.cloudinary.com no browser (uploads do admin vão server-side via SDK
+        do cloudinary, não pela página), então não merecem socket especulativo.
+        Um único <link> por origem cobre as 3 seções (preconnect é por-host).
+      */}
+      <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
+      <link rel="dns-prefetch" href="https://res.cloudinary.com" />
       <Navigation />
       <HeroSection />
       <ManifestoSection />
