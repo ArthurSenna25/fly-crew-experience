@@ -184,22 +184,65 @@ export default function SectionPrefetch() {
       // esteja no cache de borda (HIT) em vez de sob demanda (MISS = trava
       // relatado). Gallery/Workshops/Testimonials usam Cloudinary (carrossel,
       // muitas imagens) e já têm preconnect em app/page.tsx — não pré-aquecem
-      // aqui (contraproducente, ver tarefa anterior).
+      // aqui (contraproducente).
       //
       // URL byte-exata via getImageProps (mesma API do next/image que gera o
       // srcset real do <Image>): a URL aquecida bate exatamente com a que o
-      // navegador pedirá ao montar — sem replicar o loader manualmente (risco
-      // de drift se o formato do /_next/image mudar). quality:75 = default de
-      // todos os <Image> destas 4 seções (nenhum seta quality explícita).
-      // deviceSizes default (next.config.js não sobrescreve) → srcset cobre
-      // [640,750,828,1080,1200,1920,2048,3840]; pulamos 3840 (4K) — público
-      // raro e transformação pesada (mesmo teto do warm pós-deploy, se reintroduzido).
-      // ponytail: ceiling — 4 imgs × ~7 larguras ≈ 28 fetches de imagem em
-      // background idle. Se analytics mostrar custo real, reduzir para um warm
-      // viewport-aware (1 largura por imagem) lendo window.innerWidth vs o
-      // descriptor sizes, em vez de srcset cheio.
-      const warmImage = (section: string, src: string, sizes: string) => {
-        let urls: string[] = [];
+      // navegador pedirá ao montar. quality:75 = default de todos os <Image>
+      // destas 4 seções (nenhum seta quality explícita).
+      //
+      // Viewport-aware + throttled: em vez de aquecer o srcset CHEIO de cada
+      // imagem (~7 larguras × 4 imgs ≈ 28-33 fetches num loop apertado, sem
+      // noção do dispositivo), avaliamos o <img sizes> no viewport REAL
+      // (window.innerWidth via window.matchMedia) e aquecemos só a 1-2
+      // largura(s) do srcset mais próxima(s) da que o navegador realmente
+      // pedirá: a imediatamente acima (menor w ≥ largura de exibição — spec
+      // srcset usa densidade ≥ 1, sem multiplicar DPR) + a imediatamente
+      // abaixo como buffer de erro de sourceSize. ~4-8 fetches no total. Os
+      // disparos são espaçados (setTimeout escalonado de 60ms) p/ não competir
+      // pela mesma janela de rede/decode. deviceSizes default (next.config não
+      // sobrescreve); pulamos 3840 (4K).
+      const THROTTLE_MS = 60;
+      const warmQueue: { section: string; url: string }[] = [];
+
+      // Resolve o <img sizes> no viewport real → largura de exibição em CSS px
+      // que o navegador usará p/ selecionar do srcset. Top-level split por
+      // vírgula (ignora vírgulas dentro de (...) das media conditions); cada
+      // entrada = "<media-condition>? <length>". Resolução cobre vw/px (as 4
+      // seções usam vw); fallback = largura total do viewport.
+      const displayWidthFor = (sizes: string): number => {
+        const vw = window.innerWidth;
+        const parts: string[] = [];
+        let depth = 0;
+        let cur = '';
+        for (const ch of sizes.trim()) {
+          if (ch === '(') { depth++; cur += ch; }
+          else if (ch === ')') { depth--; cur += ch; }
+          else if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; }
+          else cur += ch;
+        }
+        if (cur.trim()) parts.push(cur);
+        const toPx = (len: string): number => {
+          const m = /^(\d+(?:\.\d+)?)(vw|px|rem|em|%)?$/.exec(len.trim());
+          if (!m) return vw;
+          const val = Number(m[1]);
+          switch (m[2] ?? 'vw') {
+            case 'vw': case '%': return (val / 100) * vw;
+            case 'px': return val;
+            case 'rem': case 'em': return val * 16;
+            default: return vw;
+          }
+        };
+        for (const entry of parts) {
+          const tokens = entry.trim().split(/\s+/);
+          const len = tokens[tokens.length - 1];
+          const cond = tokens.slice(0, -1).join(' ');
+          if (!cond || window.matchMedia(cond).matches) return toPx(len);
+        }
+        return vw;
+      };
+
+      const warmImage = (section: string, src: string, sizes: string): number => {
         try {
           const { props } = getImageProps({
             src,
@@ -211,8 +254,8 @@ export default function SectionPrefetch() {
           const srcSet = (props as { srcSet?: string }).srcSet ?? '';
           // srcSet = "url1 640w, url2 750w, ..." — url NÃO contém spaces/vírgulas
           // (encodeURIComponent em /_next/image garante), então split(',') +
-          // split(/\s+/) separa entrada/url do descriptor "Nw".
-          urls = srcSet
+          // split(/\s+/) separa url do descriptor "Nw".
+          const candidates = srcSet
             .split(',')
             .map((entry) => {
               const [url, descriptor] = entry.trim().split(/\s+/);
@@ -220,22 +263,44 @@ export default function SectionPrefetch() {
               return { url, w: wMatch ? Number(wMatch[1]) : 0 };
             })
             .filter((e) => e.url && e.w > 0 && e.w !== 3840)
-            .map((e) => e.url);
+            .sort((a, b) => a.w - b.w);
+          if (candidates.length === 0) return 0;
+          // Viewport-aware: o navegador seleciona do srcset a MENOR largura ≥
+          // largura de exibição (densidade ≥ 1, sem multiplicar DPR) — aquecemos
+          // essa + a imediatamente abaixo (buffer de erro de sourceSize).
+          const target = displayWidthFor(sizes);
+          const aboveIdx = candidates.findIndex((c) => c.w >= target);
+          const picks: { url: string; w: number }[] = [];
+          if (aboveIdx === -1) {
+            picks.push(candidates[candidates.length - 1]);
+          } else {
+            picks.push(candidates[aboveIdx]);
+            if (aboveIdx > 0) picks.push(candidates[aboveIdx - 1]);
+          }
+          for (const p of picks) warmQueue.push({ section, url: p.url });
+          return picks.length;
         } catch {
-          // best-effort: warm falha silencioso — não derruba o prefetch de JS.
-        }
-        for (const u of urls) {
-          const img = new Image();
-          img.onerror = () =>
-            send('SectionPrefetch', 'image warm failed', { section, url: u });
-          img.src = u;
+          return 0; // best-effort: warm falha silencioso — não derruba o prefetch de JS.
         }
       };
-      send('SectionPrefetch', 'image warm scheduled', { images: 4 });
-      warmImage('founders-nathalie', '/images/founders/nathalie.jpeg', '(max-width: 768px) 100vw, 33vw');
-      warmImage('founders-thais', '/images/founders/thais.jpeg', '(max-width: 768px) 100vw, 33vw');
-      warmImage('manifesto', '/images/manifesto/manifesto-image.png', '(max-width: 768px) 100vw, 50vw');
-      warmImage('finalCta', '/images/finalCTA/final-cta-image.png', '100vw');
+
+      let totalWarmed = 0;
+      totalWarmed += warmImage('founders-nathalie', '/images/founders/nathalie.jpeg', '(max-width: 768px) 100vw, 33vw');
+      totalWarmed += warmImage('founders-thais', '/images/founders/thais.jpeg', '(max-width: 768px) 100vw, 33vw');
+      totalWarmed += warmImage('manifesto', '/images/manifesto/manifesto-image.png', '(max-width: 768px) 100vw, 50vw');
+      totalWarmed += warmImage('finalCta', '/images/finalCTA/final-cta-image.png', '100vw');
+
+      send('SectionPrefetch', 'image warm scheduled', { images: totalWarmed });
+
+      // Throttle: espaça os fetches p/ não competir por rede/decode de uma vez.
+      warmQueue.forEach((item, i) => {
+        setTimeout(() => {
+          const img = new Image();
+          img.onerror = () =>
+            send('SectionPrefetch', 'image warm failed', { section: item.section, url: item.url });
+          img.src = item.url;
+        }, i * THROTTLE_MS);
+      });
     };
 
     // requestIdleCallback não existe no Safari/iOS — o fallback setTimeout é o
