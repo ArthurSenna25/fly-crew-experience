@@ -191,14 +191,16 @@ export default function SectionPrefetch() {
       // navegador pedirá ao montar. quality:75 = default de todos os <Image>
       // destas 4 seções (nenhum seta quality explícita).
       //
-      // Viewport-aware + throttled: em vez de aquecer o srcset CHEIO de cada
-      // imagem (~7 larguras × 4 imgs ≈ 28-33 fetches num loop apertado, sem
-      // noção do dispositivo), avaliamos o <img sizes> no viewport REAL
-      // (window.innerWidth via window.matchMedia) e aquecemos só a 1-2
-      // largura(s) do srcset mais próxima(s) da que o navegador realmente
-      // pedirá: a imediatamente acima (menor w ≥ largura de exibição — spec
-      // srcset usa densidade ≥ 1, sem multiplicar DPR) + a imediatamente
-      // abaixo como buffer de erro de sourceSize. ~4-8 fetches no total. Os
+      // Viewport-aware + DPR + throttled: em vez de aquecer o srcset CHEIO de
+      // cada imagem (~7 larguras × 4 imgs ≈ 28-33 fetches num loop apertado,
+      // sem noção do dispositivo), avaliamos o <img sizes> no viewport REAL
+      // (window.innerWidth via window.matchMedia) e multiplicamos por
+      // devicePixelRatio — o navegador seleciona do srcset a menor largura cuja
+      // densidade (w÷sourceSize) ≥ DPR, então num iPhone (390×3=1170) pede
+      // w=1200, não 640 (HAR real confirmou: 640/828 aquecidos mas o pedido
+      // real cai em w=1200 frio = 8.9s de transformação). Aquecemos a primária
+      // + a imediatamente abaixo (fallback de mismeasurement de sourceSize/DPR)
+      // — não o array inteiro, nem 1 única aposta. ~4-8 fetches no total. Os
       // disparos são espaçados (setTimeout escalonado de 60ms) p/ não competir
       // pela mesma janela de rede/decode. deviceSizes default (next.config não
       // sobrescreve); pulamos 3840 (4K).
@@ -265,10 +267,13 @@ export default function SectionPrefetch() {
             .filter((e) => e.url && e.w > 0 && e.w !== 3840)
             .sort((a, b) => a.w - b.w);
           if (candidates.length === 0) return 0;
-          // Viewport-aware: o navegador seleciona do srcset a MENOR largura ≥
-          // largura de exibição (densidade ≥ 1, sem multiplicar DPR) — aquecemos
-          // essa + a imediatamente abaixo (buffer de erro de sourceSize).
-          const target = displayWidthFor(sizes);
+          // Viewport-aware × DPR: o navegador seleciona do srcset a MENOR
+          // largura cuja densidade (w÷sourceSize) ≥ devicePixelRatio — p/ um
+          // iPhone (innerWidth 390 × DPR 3 = 1170) isso é w=1200, não 640.
+          // Aquecemos essa primária + a imediatamente abaixo (fallback de
+          // mismeasurement de sourceSize/DPR), já que DPR varia (1x desktop,
+          // 2x/3x mobile retina) — nunca 1 única aposta.
+          const target = displayWidthFor(sizes) * (window.devicePixelRatio || 1);
           const aboveIdx = candidates.findIndex((c) => c.w >= target);
           const picks: { url: string; w: number }[] = [];
           if (aboveIdx === -1) {
