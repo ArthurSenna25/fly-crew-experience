@@ -1,8 +1,35 @@
 'use client';
 
+// ============================================================================
+// ⚠️ VERSÃO DE TESTE DE ISOLAMENTO (BISSEÇÃO) — TEMPORÁRIA, NÃO É A FINAL ⚠️
+//
+// Esta NÃO é a versão final do Diagnostics.tsx. É uma versão de teste radical
+// criada para a bisseção do congelamento de boot: mantém APENAS o heartbeat da
+// thread principal (setInterval 250ms + beacon de gap) para verificar se o
+// próprio Diagnostics.tsx — que cresceu bastante ao longo desta investigação
+// (interceptador de console, múltiplos PerformanceObserver, listeners de
+// navigation/device/visibility/lifecycle) — não é ele mesmo um contribuinte
+// para o freeze que ele mesmo mede.
+//
+// Tudo o mais foi COMENTADO (preservado no código para fácil reversão):
+//   - Interceptador de console.error/warn (mismatch de hidratação)
+//   - PerformanceObserver de longtask
+//   - DiagnosticsModuleTiming (marcadores perf.mark/measure top-level)
+//   - DiagnosticsNavigation (Navigation Timing API)
+//   - DiagnosticsDevice (info de conexão/dispositivo)
+//   - DiagnosticsVisibility (visibilitychange)
+//   - DiagnosticsLifecycle (pageshow/pagehide)
+//   - Listeners de error / unhandledrejection / resource-error
+//   - Helper send() (beacon imediato) — usado só pelos listeners desativados
+//
+// Reverter: `git checkout components/Diagnostics.tsx` (branch de teste).
+// ============================================================================
+
 import { useEffect } from 'react';
 import { queueDebugLog, type DebugLogEntry } from '@/lib/debug-log-batch';
 
+// (Tipos auxiliares do DiagnosticsDevice — desativados nesta bisseção)
+/*
 type NetworkInformationLike = {
   effectiveType?: string;
   downlink?: number;
@@ -12,7 +39,10 @@ type NavigatorLike = Navigator & {
   connection?: NetworkInformationLike;
   deviceMemory?: number;
 };
+*/
 
+// (Marcadores top-level de module-eval / DiagnosticsModuleTiming — desativados)
+/*
 // Marcador 1 (top-level do módulo): selado quando o JS deste chunk do
 // Diagnostics começa a ser avaliado (parse/eval do módulo). Diagnostics é
 // importado via dynamic({ ssr: false }) em ClientWidgets.tsx, então este
@@ -29,15 +59,26 @@ const moduleEvalMsSinceNavStart =
 if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
   performance.mark(DIAGNOSTICS_MODULE_EVAL);
 }
+*/
 
-// Diagnóstico global de runtime (best-effort): captura erros JS, rejeições
-// não tratadas, falhas de carregamento de recurso, mudanças de visibilidade,
-// ciclo de vida da página (bfcache via pageshow/pagehide), tipo de navegação
-// e info de dispositivo/conexão. Sem render visual (return null). Lê apenas
-// metadados técnicos do navegador/erro — nenhum dado de formulário, cookie
-// ou input do usuário. Strings longas (stack, reason) são truncadas em 500.
+// Diagnóstico global de runtime (best-effort). NESTA VERSÃO DE TESTE de
+// isolamento: sem render visual (return null), mantém APENAS o heartbeat.
 export default function Diagnostics() {
   useEffect(() => {
+    // Adapter para beacons BATCHED: o heartbeat enfileira no lote único de
+    // lib/debug-log-batch.ts em vez de disparar POST imediato.
+    const sendBatched = (
+      tag: string,
+      msg: string,
+      extra?: Record<string, unknown>,
+    ) => {
+      const entry: DebugLogEntry = { tag, msg };
+      if (extra) entry.extra = extra;
+      queueDebugLog(entry);
+    };
+
+    // (Helper send() — beacon imediato — desativado nesta bisseção)
+    /*
     const send = (
       tag: string,
       msg: string,
@@ -63,27 +104,10 @@ export default function Diagnostics() {
         });
       }
     };
+    */
 
-    // Adapter para beacons BATCHED (boot one-shots + heartbeat + longtask):
-    // mesma assinatura de send(), mas enfileira no lote único de
-    // lib/debug-log-batch.ts em vez de disparar POST imediato. Beacons
-    // imediatos (erros, visibility, lifecycle) continuam usando send().
-    const sendBatched = (
-      tag: string,
-      msg: string,
-      extra?: Record<string, unknown>,
-    ) => {
-      const entry: DebugLogEntry = { tag, msg };
-      if (extra) entry.extra = extra;
-      queueDebugLog(entry);
-    };
-
-    // Marcador 2 (primeiro useEffect): mede o delta entre a avaliação do
-    // módulo (DIAGNOSTICS_MODULE_EVAL) e o primeira execução deste effect.
-    // Como Diagnostics é dynamic({ ssr: false }), este delta reflete o tempo
-    // para baixar+parsear+avaliar este chunk lazy após a hidratação inicial —
-    // não o freeze inicial da landing (que ocorre antes deste chunk existir).
-    // enviado uma vez no mount.
+    // (DiagnosticsModuleTiming — Marcador 2 — desativado nesta bisseção)
+    /*
     if (
       typeof performance !== 'undefined' &&
       typeof performance.mark === 'function' &&
@@ -105,6 +129,7 @@ export default function Diagnostics() {
         // top-level (ambiente sem API) — ignora silenciosamente.
       }
     }
+    */
 
     // (i) Heartbeat da thread principal — setInterval a cada 250ms, iniciado
     // o mais cedo possível no mount. Cada tick mede o delta desde o tick
@@ -142,6 +167,8 @@ export default function Diagnostics() {
       }
     }, 250);
 
+    // (Listeners de erro / ciclo-de-vida / visibilidade — desativados nesta bisseção)
+    /*
     // (a) Erros JS não capturados (fase de bubble).
     const handleJsError = (e: ErrorEvent) => {
       send('DiagnosticsError', 'js error', {
@@ -206,9 +233,10 @@ export default function Diagnostics() {
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('pageshow', handlePageShow);
     window.addEventListener('pagehide', handlePageHide);
+    */
 
-    // (f) Tipo de navegação (reload/navigate/back_forward) — uma vez no mount,
-    // via Navigation Timing API.
+    // (DiagnosticsNavigation — Navigation Timing — desativado nesta bisseção)
+    /*
     const navEntry = performance.getEntriesByType('navigation')[0] as
       | PerformanceNavigationTiming
       | undefined;
@@ -220,9 +248,10 @@ export default function Diagnostics() {
         loadEventEnd: Math.round(navEntry.loadEventEnd),
       });
     }
+    */
 
-    // (g) Info de conexão/dispositivo — best-effort (iOS Safari pode não expor
-    // connection/deviceMemory).
+    // (DiagnosticsDevice — info de conexão/dispositivo — desativado nesta bisseção)
+    /*
     const nav = navigator as NavigatorLike;
     const conn = nav.connection;
     sendBatched('DiagnosticsDevice', 'device info', {
@@ -232,7 +261,10 @@ export default function Diagnostics() {
       hardwareConcurrency: navigator.hardwareConcurrency ?? null,
       userAgent: navigator.userAgent,
     });
+    */
 
+    // (PerformanceObserver de longtask — desativado nesta bisseção)
+    /*
     // (h) Long tasks — tarefas que bloqueiam a thread principal por >50ms.
     // PerformanceObserver expõe isso sem precisar de Mac/Web Inspector; revela
     // se/ quando a thread trava no cenário de cache frio em navegação NOVA e
@@ -257,19 +289,17 @@ export default function Diagnostics() {
         // 'longtask' pode não ser suportado (WebKit/Firefox antigos) — ignora.
       }
     }
+    */
 
     return () => {
-      window.removeEventListener('error', handleJsError);
-      window.removeEventListener('error', handleResourceError, true);
-      window.removeEventListener('unhandledrejection', handleRejection);
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('pageshow', handlePageShow);
-      window.removeEventListener('pagehide', handlePageHide);
-      if (longTaskObserver) longTaskObserver.disconnect();
+      // Cleanup (versão de teste): apenas o heartbeat precisa ser limpo.
+      // Os listeners/observers originais estão desativados (comentados).
       clearInterval(heartbeatId);
     };
   }, []);
 
+  // (Interceptador de console.error/warn — mismatch de hidratação — desativado nesta bisseção)
+  /*
   // Interceptor de console.error/warn (mismatch de hidratação): o React
   // emite "Hydration failed because the server rendered HTML didn't match
   // the client." e "Text content does not match server-rendered HTML." via
@@ -335,6 +365,7 @@ export default function Diagnostics() {
       console.warn = originalWarn;
     };
   }, []);
+  */
 
   return null;
 }
