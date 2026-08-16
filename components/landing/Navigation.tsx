@@ -509,11 +509,17 @@ export default function Navigation() {
       */}
       <div className="max-w-7xl mx-auto px-6 lg:px-8 py-4 xl:py-5">
         <div className="relative z-50 flex items-center justify-between gap-4">
-          {/* Logo */}
-          <button
-            type="button"
+          {/* Logo — <a href="#"> em vez de <button>: voltar ao topo é
+              semanticamente um link, e href="#" garante que sem JS o clique
+              role para o topo nativamente (progressive enhancement). Com JS,
+              onClick faz o smooth-scroll via scrollTo('hero'). */}
+          <a
+            href="#"
             className="group flex shrink-0 items-center gap-3 cursor-pointer transition-transform duration-150 hover:scale-[1.02] active:scale-[0.98]"
-            onClick={() => scrollTo('hero')}
+            onClick={(e) => {
+              e.preventDefault();
+              scrollTo('hero');
+            }}
             aria-label="Ir para o início"
             data-testid="logo"
           >
@@ -544,7 +550,7 @@ export default function Navigation() {
                 className="pointer-events-none absolute -inset-2 bg-gradient-to-r from-gold-prestige/0 via-gold-prestige/10 to-gold-prestige/0 opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
               />
             </div>
-          </button>
+          </a>
 
           {/* Desktop Navigation — só a partir de xl (1280px). Abaixo disso o
               container já não tem largura suficiente pra 6 links + CTA sem
@@ -573,9 +579,13 @@ export default function Navigation() {
             {LINKS.map((link, idx) => {
               const isActive = activeSection === link.id;
               return (
-                <button
+                <a
                   key={link.id}
-                  onClick={() => scrollTo(link.id)}
+                  href={`#${link.id}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollTo(link.id);
+                  }}
                   className={cn(
                     'nav-link-in group relative flex shrink-0 items-center gap-1.5 whitespace-nowrap py-2 text-sm font-inter font-medium tracking-wide transition-colors duration-200',
                     isActive ? 'text-gold-prestige' : 'text-silver-mist hover:text-white',
@@ -611,7 +621,7 @@ export default function Navigation() {
                       por `left`/`top`/`width` e animado via `transform`
                       pelo effect FLIP manual acima (rAF+direct-DOM).
                       Ver `underlineRef` + `useIsomorphicLayoutEffect`. */}
-                </button>
+                </a>
               );
             })}
 
@@ -619,8 +629,12 @@ export default function Navigation() {
                 hover só encorpa o próprio dourado em baixa opacidade
                 (bg-gold-prestige/10) + um glow suave. Nada de preto, nada de
                 crossfade de cor — e por isso nada do tom marrom/sujo do print. */}
-            <button
-              onClick={() => scrollTo('contact')}
+            <a
+              href="#contact"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollTo('contact');
+              }}
               className="group relative ml-2 flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-gold-prestige px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-gold-prestige transition-all duration-200 hover:bg-gold-prestige/10 hover:shadow-[0_4px_20px_rgba(212,175,55,0.25)] hover:scale-[1.03] active:scale-[0.97]"
               data-testid="nav-contact-btn"
             >
@@ -629,7 +643,7 @@ export default function Navigation() {
                 size={14}
                 className="shrink-0 transition-transform duration-300 ease-out group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
               />
-            </button>
+            </a>
           </div>
 
           {/* Mobile/Tablet Toggle — 44px de alvo de toque, ícone com morph
@@ -752,9 +766,13 @@ export default function Navigation() {
               {LINKS.map((link, idx) => {
                 const isActive = activeSection === link.id;
                 return (
-                  <button
+                  <a
                     key={link.id}
-                    onClick={() => scrollTo(link.id)}
+                    href={`#${link.id}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      scrollTo(link.id);
+                    }}
                     className={cn(
                       'group flex items-center gap-4 rounded-lg px-3 py-3.5 text-left transition-colors duration-200',
                       mobileOpen && 'mobile-link-in',
@@ -788,13 +806,17 @@ export default function Navigation() {
                         className="ml-auto h-1.5 w-1.5 rounded-full bg-gold-prestige"
                       />
                     )}
-                  </button>
+                  </a>
                 );
               })}
             </nav>
 
-            <button
-              onClick={() => scrollTo('contact')}
+            <a
+              href="#contact"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollTo('contact');
+              }}
               className={cn(
                 'mt-4 flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-gold-prestige bg-gold-prestige/10 px-6 py-4 text-sm font-semibold uppercase tracking-wider text-gold-prestige transition-colors duration-300 hover:bg-gold-prestige hover:text-executive-black',
                 mobileOpen && 'mobile-link-in',
@@ -808,10 +830,37 @@ export default function Navigation() {
             >
               Quero Fazer Parte
               <ArrowUpRight size={16} className="shrink-0" />
-            </button>
+            </a>
           </div>
         </div>
       )}
+
+      {/*
+        Fallback de navegação para JavaScript DESABILITADO (progressive
+        enhancement). Sem JS: o menu mobile é gated por estado React
+        (mobileOpen/menuMounted) e nunca renderiza nem abre; os links desktop
+        estão em `hidden xl:flex` (invisíveis abaixo de xl). Logo, em
+        mobile/tablet sem JS não haveria NENHUMA navegação possível — exatamente
+        o cenário do congelamento de 8-15s no iOS Safari (JS travado).
+
+        <noscript> só é exibido pelo navegador quando JS está desligado, então
+        nunca colide com o menu mobile animado (JS ligado) nem com estado React.
+        Os <a href="#id"> saltam nativamente para as seções (os ids existem no
+        SSR: experience, founders, workshops, gallery, testimonials, community,
+        contact). xl:hidden → só aparece abaixo de xl; no desktop sem JS, a nav
+        real (agora com <a href>) já cobre a navegação.
+
+        dangerouslySetInnerHTML é o padrão documentado do React para conteúdo de
+        <noscript> (evita warnings de hidratação — o browser não hidrata o
+        interior de um <noscript>). Os textos dos links vêm de LINKS (constantes
+        estáticas, sem input de usuário → sem risco de XSS). z-50 + vindo após o
+        <nav> fixo no DOM → pinta por cima da nav morta (hambúrguer inerte) sem JS.
+      */}
+      <noscript
+        dangerouslySetInnerHTML={{
+          __html: `<nav aria-label="Navegação principal (sem JavaScript)" class="fixed inset-x-0 top-0 z-50 flex items-center gap-3 overflow-x-auto border-b border-gold-prestige/20 bg-executive-black/95 px-5 py-3 xl:hidden"><span class="whitespace-nowrap font-cinzel text-lg tracking-[0.2em] text-gold-prestige">FLY CREW</span><span class="mx-1 h-4 w-px shrink-0 bg-white/10" aria-hidden="true"></span>${LINKS.map((link) => `<a href="#${link.id}" class="whitespace-nowrap text-sm font-medium uppercase tracking-wide text-silver-mist transition-colors hover:text-gold-prestige">${link.label}</a>`).join('')}<a href="#contact" class="ml-1 whitespace-nowrap rounded-full border border-gold-prestige px-3 py-1.5 text-sm font-semibold uppercase tracking-wide text-gold-prestige">Quero Fazer Parte</a></nav>`,
+        }}
+      />
     </>
   );
 }
